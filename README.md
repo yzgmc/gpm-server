@@ -41,6 +41,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `GPM_PUBLIC_BASE_URL` | `http://127.0.0.1:<PORT>` | 上报给后台的可访问地址 |
 | `GPM_REPORTER_INTERVAL` | `10` | 上报间隔（秒） |
 | `GPM_REPORTER_ID` | 自动生成 | 上报端唯一标识，留空则用 server_kind+随机后缀并持久化 |
+| `GPM_LIGHT_DISK_YELLOW` | `85` | 磁盘占用达到该百分比（%）变黄灯 |
+| `GPM_LIGHT_DISK_RED` | `95` | 磁盘占用达到该百分比（%）变红灯 |
+| `GPM_LIGHT_ERROR_RED` | `10` | 累计错误数达到该值变红灯 |
+
+## 状态指示灯
+
+服务端在每次上报心跳时根据磁盘占用与累计错误数计算自身灯色（绿/黄/红），随 `Heartbeat.light` 上报给 web-admin。后台据此渲染彩色指示灯并聚合「系统总体灯」。阈值可通过上表环境变量调整。
 
 ## API 速览
 

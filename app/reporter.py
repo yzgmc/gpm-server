@@ -1,8 +1,9 @@
 """服务端上报器：构造 Heartbeat 并通过 gpm_common.Reporter 上报到 web-admin。
 
 上报的 metrics 包含：
-- modpack_count / mod_count / storage_used_bytes / uptime_seconds
+- modpack_count / mod_count / storage_used_bytes / uptime_seconds / error_count
 - modpacks / mods：完整条目列表，供 web-admin 聚合展示推送条目
+- light：状态指示灯（绿/黄/红），由 compute_server_light 根据磁盘占用与错误数计算
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import os
 import uuid
 
-from gpm_common import API_VERSION, Heartbeat, Reporter
+from gpm_common import API_VERSION, Heartbeat, Reporter, compute_server_light
 
 from app import storage
 from app.config import settings
@@ -44,6 +45,8 @@ def _reporter_id() -> str:
 def _build_heartbeat() -> Heartbeat:
     modpacks = storage.list_modpacks()
     mods = storage.list_mods()
+    # 计算状态指示灯：基于存储目录磁盘占用 + 累计错误数
+    light = compute_server_light(settings.data_dir, error_count=server_info.error_count)
     return Heartbeat(
         reporter_id=_reporter_id(),
         kind=settings.server_kind,
@@ -51,14 +54,19 @@ def _build_heartbeat() -> Heartbeat:
         base_url=settings.public_base_url,
         status="online",
         protocol_version=API_VERSION,
+        light=light,
         metrics={
             "modpack_count": len(modpacks),
             "mod_count": len(mods),
             "storage_used_bytes": storage.storage_used_bytes(),
             "uptime_seconds": server_info.uptime_seconds(),
+            "error_count": server_info.error_count,
             # 携带完整条目，供 web-admin 聚合推送条目视图
             "modpacks": [m.model_dump(mode="json") for m in modpacks],
             "mods": [m.model_dump(mode="json") for m in mods],
+            # 灯色冗余放进 metrics，便于后台前端直接读取
+            "light_level": light.level,
+            "light_reason": light.reason,
         },
     )
 

@@ -13,6 +13,7 @@ class ServerInfo:
         self.request_count = 0
         self.upload_count = 0
         self.download_count = 0
+        self.error_count = 0
 
     def uptime_seconds(self) -> float:
         return time.time() - self._start_ts
@@ -25,6 +26,9 @@ class ServerInfo:
 
     def record_download(self) -> None:
         self.download_count += 1
+
+    def record_error(self) -> None:
+        self.error_count += 1
 
 
 server_info = ServerInfo()

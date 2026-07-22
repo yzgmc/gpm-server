@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(GamePushError)
     async def _handle_push_error(_: Request, exc: GamePushError):
+        server_info.record_error()
         return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
 
     app.include_router(games.router)
