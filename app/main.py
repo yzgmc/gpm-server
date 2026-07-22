@@ -8,11 +8,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from gpm_common import API_VERSION, GamePushError
+from gpm_common import API_VERSION, AuthError, GamePushError
 
 from app.config import settings
 from app.reporter import start_reporter, stop_reporter
-from app.routes import games, mods, modpacks, status, sync
+from app.routes import auth, games, mods, modpacks, status, sync
 from app.server_info import server_info
 
 
@@ -42,6 +42,14 @@ def create_app() -> FastAPI:
         server_info.record_error()
         return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
 
+    @app.exception_handler(AuthError)
+    async def _handle_auth_error(_: Request, exc: AuthError):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": exc.message, "code": "UNAUTHORIZED"},
+        )
+
+    app.include_router(auth.router)
     app.include_router(games.router)
     app.include_router(status.router)
     app.include_router(sync.router)

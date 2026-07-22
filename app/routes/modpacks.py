@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse
 
-from gpm_common import GamePushError, ModpackCreate, route
+from gpm_common import GamePushError, ModpackCreate, require_token, route
 from gpm_common.protocol import ErrorCode
 
 from app import storage
@@ -14,6 +14,9 @@ from app.server_info import server_info
 
 
 router = APIRouter()
+
+# 写操作（上传 / 删除）需要登录 token；读操作（列表 / 详情 / 下载）对客户端开放
+_require_auth = Depends(require_token(settings.auth_secret))
 
 
 def _form_field(value: str | None, default: str = "") -> str:
@@ -25,7 +28,7 @@ def list_modpacks():
     return {"modpacks": [m.model_dump() for m in storage.list_modpacks()]}
 
 
-@router.post(route("/modpacks"))
+@router.post(route("/modpacks"), dependencies=[_require_auth])
 async def upload_modpack(
     file: UploadFile = File(...),
     name: str = Form(...),
@@ -83,7 +86,7 @@ def download_modpack(item_id: str):
     return FileResponse(path, filename=modpack.file_name)
 
 
-@router.delete(route("/modpacks/{item_id}"))
+@router.delete(route("/modpacks/{item_id}"), dependencies=[_require_auth])
 def delete_modpack(item_id: str):
     storage.delete_modpack(item_id)
     return {"deleted": item_id}

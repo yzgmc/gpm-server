@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import FileResponse
 
-from gpm_common import GamePushError, route
+from gpm_common import GamePushError, require_token, route
 from gpm_common.protocol import ErrorCode
 
 from app import storage
@@ -15,13 +15,16 @@ from app.server_info import server_info
 
 router = APIRouter()
 
+# 写操作需要登录 token；读操作对客户端开放
+_require_auth = Depends(require_token(settings.auth_secret))
+
 
 @router.get(route("/mods"))
 def list_mods():
     return {"mods": [m.model_dump() for m in storage.list_mods()]}
 
 
-@router.post(route("/mods"))
+@router.post(route("/mods"), dependencies=[_require_auth])
 async def upload_mod(
     file: UploadFile = File(...),
     name: str = Form(...),
@@ -73,7 +76,7 @@ def download_mod(item_id: str):
     return FileResponse(path, filename=mod.file_name)
 
 
-@router.delete(route("/mods/{item_id}"))
+@router.delete(route("/mods/{item_id}"), dependencies=[_require_auth])
 def delete_mod(item_id: str):
     storage.delete_mod(item_id)
     return {"deleted": item_id}

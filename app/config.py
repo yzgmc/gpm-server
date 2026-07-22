@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from gpm_common import generate_secret, hash_password
+
 
 class Settings:
     host: str = os.getenv("GPM_HOST", "0.0.0.0")
@@ -20,6 +22,36 @@ class Settings:
     )  # 上报给后台的可访问地址
     reporter_interval: float = float(os.getenv("GPM_REPORTER_INTERVAL", "10"))
     reporter_id: str = os.getenv("GPM_REPORTER_ID", "")  # 留空则用 server_name
+
+    # 登录认证
+    _auth_secret_env: str = os.getenv("GPM_AUTH_SECRET", "")  # 留空则进程内随机生成
+    _users_env: str = os.getenv("GPM_USERS", "")  # user1:hash1,user2:hash2；留空用默认 admin/admin123
+
+    def __init__(self) -> None:
+        # 兜底 secret：未配置则进程内随机生成（重启后所有 token 失效，仅适合开发）
+        self._secret = self._auth_secret_env or generate_secret()
+        self._users = self._parse_users(self._users_env)
+
+    @staticmethod
+    def _parse_users(raw: str) -> dict[str, str]:
+        if raw:
+            users: dict[str, str] = {}
+            for pair in raw.split(","):
+                pair = pair.strip()
+                if ":" in pair:
+                    u, h = pair.split(":", 1)
+                    users[u.strip()] = h.strip()
+            return users
+        # 默认管理员：admin / admin123
+        return {"admin": hash_password("admin123")}
+
+    @property
+    def auth_secret(self) -> str:
+        return self._secret
+
+    @property
+    def users(self) -> dict[str, str]:
+        return self._users
 
     @property
     def max_upload_bytes(self) -> int:
