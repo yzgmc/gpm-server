@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from gpm_common import generate_secret, hash_password
+
+# Nuitka 编译后存在该变量；用于区分打包 exe 与源码运行环境
+_IS_COMPILED = "__compiled__" in dir()
+
+
+def _default_data_dir() -> str:
+    """数据目录：Nuitka 打包后用 exe 同级 data；源码运行用仓库根 data。"""
+    if _IS_COMPILED:
+        return str(Path(sys.executable).resolve().parent / "data")
+    return str(Path(__file__).resolve().parent.parent / "data")
 
 
 class Settings:
     host: str = os.getenv("GPM_HOST", "0.0.0.0")
     port: int = int(os.getenv("GPM_PORT", "8000"))
-    data_dir: str = os.getenv("GPM_DATA_DIR", str(Path(__file__).resolve().parent.parent / "data"))
+    data_dir: str = os.getenv("GPM_DATA_DIR", _default_data_dir())
     server_name: str = os.getenv("GPM_SERVER_NAME", "gpm-windows-server")
     server_kind: str = "windows-server"
     max_upload_mb: int = int(os.getenv("GPM_MAX_UPLOAD_MB", "4096"))
