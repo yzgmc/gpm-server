@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from gpm_common import API_VERSION, GamePushError
 
 from app.config import settings
+from app.reporter import start_reporter, stop_reporter
 from app.routes import games, mods, modpacks, status, sync
 from app.server_info import server_info
 
@@ -46,6 +47,15 @@ def create_app() -> FastAPI:
     app.include_router(modpacks.router)
     app.include_router(mods.router)
 
+    @app.on_event("startup")
+    def _start_reporter():
+        # Push 模型：启动后台线程，定期向 web-admin 上报心跳
+        start_reporter()
+
+    @app.on_event("shutdown")
+    def _stop_reporter():
+        stop_reporter()
+
     @app.get("/")
     def root():
         return {
@@ -53,6 +63,7 @@ def create_app() -> FastAPI:
             "kind": settings.server_kind,
             "protocol_version": API_VERSION,
             "docs": "/docs",
+            "reporting_to": settings.admin_url or None,
         }
 
     return app
