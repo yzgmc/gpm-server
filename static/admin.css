@@ -67,6 +67,33 @@ body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; ba
 .btn-dl:hover { background: #2563eb; color: #fff; }
 .empty-row { text-align: center; color: #94a3b8; padding: 20px; }
 
+/* Tab 栏 */
+.tabs-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; }
+.tab-btn { background: transparent; border: none; padding: 8px 18px; font-size: 14px; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
+.tab-btn:hover { color: #2563eb; }
+
+/* 徽章 */
+.badge-on { background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+.badge-off { background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+
+/* 编辑/切换按钮 */
+.btn-edit { background: #fef3c7; color: #d97706; border: none; padding: 4px 12px; border-radius: 5px; font-size: 12px; cursor: pointer; margin-right: 6px; }
+.btn-edit:hover { background: #d97706; color: #fff; }
+.btn-toggle { background: #e0e7ff; color: #4f46e5; border: none; padding: 4px 12px; border-radius: 5px; font-size: 12px; cursor: pointer; margin-right: 6px; }
+.btn-toggle:hover { background: #4f46e5; color: #fff; }
+.btn-del:disabled { background: #f1f5f9; color: #cbd5e1; cursor: not-allowed; }
+
+/* 弹窗 */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal-content { background: #fff; border-radius: 10px; padding: 20px; width: 420px; max-width: 90vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-head h3 { font-size: 16px; }
+.modal-close { background: none; border: none; font-size: 22px; color: #94a3b8; cursor: pointer; line-height: 1; }
+.modal-close:hover { color: #ef4444; }
+.modal-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
 @media (max-width: 768px) {
   .status-cards { grid-template-columns: repeat(2, 1fr); }
+  .modal-content { width: 95vw; }
 }

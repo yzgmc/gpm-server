@@ -78,6 +78,12 @@ def get_modpack(item_id: str):
     return storage.get_modpack(item_id).model_dump()
 
 
+@router.patch(route("/modpacks/{item_id}"), dependencies=[_require_auth])
+def update_modpack(item_id: str, fields: dict):
+    """修改整合包元数据 / 上下架状态。"""
+    return storage.update_modpack(item_id, fields).model_dump()
+
+
 @router.get(route("/modpacks/{item_id}/download"))
 def download_modpack(item_id: str):
     modpack = storage.get_modpack(item_id)

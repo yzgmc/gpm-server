@@ -17,11 +17,12 @@ router = APIRouter()
 
 @router.get(route("/sync"))
 def sync():
+    # 仅向客户端同步已上架（enabled=True）的条目
     return SyncResponse(
         protocol_version=API_VERSION,
         server_name=settings.server_name,
-        modpacks=[m.model_dump() for m in storage.list_modpacks()],
-        mods=[m.model_dump() for m in storage.list_mods()],
+        modpacks=[m.model_dump() for m in storage.list_modpacks() if m.enabled],
+        mods=[m.model_dump() for m in storage.list_mods() if m.enabled],
         games=[g.model_dump() for g in GameAdapterRegistry.all_games()],
         server_time=datetime.now(timezone.utc),
     ).model_dump()

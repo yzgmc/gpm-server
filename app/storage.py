@@ -159,6 +159,20 @@ def delete_modpack(item_id: str) -> None:
         shutil.rmtree(base)
 
 
+def update_modpack(item_id: str, fields: dict) -> Modpack:
+    """修改整合包元数据（名称/版本/描述/上下架状态等），刷新 updated_at。"""
+    modpack = get_modpack(item_id)
+    data = modpack.model_dump()
+    # 仅允许修改这些字段
+    for k in ("name", "version", "game", "game_version", "mod_loader",
+              "mod_loader_version", "description", "enabled"):
+        if k in fields:
+            data[k] = fields[k]
+    data["updated_at"] = _now()
+    _write_meta(KIND_MODPACKS, item_id, data)
+    return Modpack(**data)
+
+
 # ----------------------------- Mods -----------------------------
 
 def save_mod(meta_fields: dict, uploaded_file_path: str, original_filename: str) -> Mod:
@@ -225,6 +239,18 @@ def delete_mod(item_id: str) -> None:
 
     if os.path.isdir(base):
         shutil.rmtree(base)
+
+
+def update_mod(item_id: str, fields: dict) -> Mod:
+    """修改模组元数据，刷新 updated_at。"""
+    mod = get_mod(item_id)
+    data = mod.model_dump()
+    for k in ("name", "version", "game", "modpack_id", "description", "enabled"):
+        if k in fields:
+            data[k] = fields[k]
+    data["updated_at"] = _now()
+    _write_meta(KIND_MODS, item_id, data)
+    return Mod(**data)
 
 
 # ----------------------------- 统计 -----------------------------

@@ -15,6 +15,7 @@
     </div>
     <div class="topbar-right">
       <span id="userBadge" class="user-badge"></span>
+      <button id="changePwdBtn" class="logout-btn" style="border-color:#3b82f6;color:#3b82f6;">改密码</button>
       <button id="logoutBtn" class="logout-btn">退出</button>
     </div>
   </header>
@@ -29,8 +30,15 @@
       <div class="stat-card"><div class="stat-label">存储占用</div><div class="stat-value" id="statStorage">—</div></div>
     </section>
 
+    <!-- 选项卡 -->
+    <div class="tabs-bar">
+      <button class="tab-btn active" data-tab="modpacks">整合包管理</button>
+      <button class="tab-btn" data-tab="mods">模组管理</button>
+      <button class="tab-btn" data-tab="users">用户管理</button>
+    </div>
+
     <!-- 整合包管理 -->
-    <section class="panel">
+    <section class="panel tab-panel" id="tab-modpacks">
       <div class="panel-head"><h2>整合包管理</h2><button class="refresh-btn" onclick="loadModpacks()">刷新</button></div>
       <form id="modpackForm" class="upload-form">
         <div class="form-row">
@@ -58,13 +66,13 @@
         <span id="modpackMsg" class="form-msg"></span>
       </form>
       <table class="data-table">
-        <thead><tr><th>ID</th><th>名称</th><th>版本</th><th>游戏</th><th>游戏版本</th><th>加载器</th><th>大小</th><th>操作</th></tr></thead>
+        <thead><tr><th>ID</th><th>名称</th><th>版本</th><th>游戏</th><th>游戏版本</th><th>加载器</th><th>大小</th><th>状态</th><th>操作</th></tr></thead>
         <tbody id="modpackTbody"></tbody>
       </table>
     </section>
 
     <!-- 模组管理 -->
-    <section class="panel">
+    <section class="panel tab-panel" id="tab-mods" style="display:none;">
       <div class="panel-head"><h2>模组管理</h2><button class="refresh-btn" onclick="loadMods()">刷新</button></div>
       <form id="modForm" class="upload-form">
         <div class="form-row">
@@ -80,11 +88,52 @@
         <span id="modMsg" class="form-msg"></span>
       </form>
       <table class="data-table">
-        <thead><tr><th>ID</th><th>名称</th><th>版本</th><th>游戏</th><th>大小</th><th>操作</th></tr></thead>
+        <thead><tr><th>ID</th><th>名称</th><th>版本</th><th>游戏</th><th>大小</th><th>状态</th><th>操作</th></tr></thead>
         <tbody id="modTbody"></tbody>
       </table>
     </section>
+
+    <!-- 用户管理 -->
+    <section class="panel tab-panel" id="tab-users" style="display:none;">
+      <div class="panel-head"><h2>用户管理</h2><button class="refresh-btn" onclick="loadUsers()">刷新</button></div>
+      <form id="addUserForm" class="upload-form">
+        <div class="form-row">
+          <label>用户名<input type="text" name="username" placeholder="newuser" required /></label>
+          <label>密码<input type="password" name="password" placeholder="至少6位" required /></label>
+        </div>
+        <button type="submit" class="btn-upload" id="addUserBtn">添加用户</button>
+        <span id="userMsg" class="form-msg"></span>
+      </form>
+      <table class="data-table">
+        <thead><tr><th>用户名</th><th>操作</th></tr></thead>
+        <tbody id="userTbody"></tbody>
+      </table>
+    </section>
   </main>
+
+  <!-- 编辑对话框 -->
+  <div id="editModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-head"><h3 id="editModalTitle">编辑</h3><button class="modal-close" onclick="closeEditModal()">×</button></div>
+      <form id="editForm"></form>
+      <div class="modal-foot"><button class="btn-upload" id="editSaveBtn">保存</button><button class="refresh-btn" onclick="closeEditModal()">取消</button></div>
+    </div>
+  </div>
+
+  <!-- 改密码对话框 -->
+  <div id="pwdModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <div class="modal-head"><h3>修改密码</h3><button class="modal-close" onclick="document.getElementById('pwdModal').style.display='none'">×</button></div>
+      <form id="pwdForm" class="upload-form">
+        <div class="form-row"><label class="full">原密码<input type="password" name="old_password" required /></label></div>
+        <div class="form-row"><label class="full">新密码<input type="password" name="new_password" placeholder="至少6位" required /></label></div>
+        <div class="form-row"><label class="full">确认新密码<input type="password" name="confirm" required /></label></div>
+        <span id="pwdMsg" class="form-msg"></span>
+      </form>
+      <div class="modal-foot"><button class="btn-upload" id="pwdSaveBtn">确认修改</button><button class="refresh-btn" onclick="document.getElementById('pwdModal').style.display='none'">取消</button></div>
+    </div>
+  </div>
+
   <script src="/static/admin.js"></script>
 </body>
 </html>

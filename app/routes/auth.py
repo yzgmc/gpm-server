@@ -1,21 +1,26 @@
-"""认证路由：登录签发 JWT。
+"""认证与用户管理路由。
 
-读操作（同步 / 下载 / 状态）对客户端保持开放，仅写操作（上传 / 删除）需要 token。
+读操作（同步 / 下载 / 状态）对客户端保持开放，仅写操作（上传 / 删除 / 修改）需要 token。
+用户管理（改密码 / 增删用户）需要管理员 token。
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from gpm_common import AuthError, create_token, route, verify_password
+from gpm_common import AuthError, create_token, decode_token, require_token, route, verify_password
 
 from app.config import settings
 
 
 router = APIRouter()
 
+# 写操作与用户管理需要登录 token
+_require_auth = Depends(require_token(settings.auth_secret))
 
+
+# ---------- 登录 ----------
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -35,9 +40,61 @@ def login(req: LoginRequest) -> LoginResponse:
     if not stored or not verify_password(req.password, stored):
         raise AuthError("用户名或密码错误", status_code=401)
     token = create_token({"sub": req.username, "role": "admin"}, settings.auth_secret)
-    return LoginResponse(
-        token=token,
-        username=req.username,
-        role="admin",
-        expires_in=86400,
-    )
+    return LoginResponse(token=token, username=req.username, role="admin", expires_in=86400)
+
+
+# ---------- 改自己的密码 ----------
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+@router.put(route("/auth/password"), dependencies=[_require_auth])
+def change_password(req: ChangePasswordRequest, request: Request) -> dict:
+    """修改当前登录用户密码。从 Authorization 头解析用户名。"""
+    auth = request.headers.get("Authorization", "")
+    token = auth.split(" ", 1)[1] if auth.startswith("Bearer ") else ""
+    payload = decode_token(token, settings.auth_secret)
+    username = getattr(payload, "sub", "")
+    if not username or username not in settings.users:
+        raise AuthError("用户不存在", status_code=401)
+    if not verify_password(req.old_password, settings.users[username]):
+        raise AuthError("原密码错误", status_code=401)
+    if len(req.new_password) < 6:
+        raise AuthError("新密码至少 6 位", status_code=400)
+    settings.set_password(username, req.new_password)
+    return {"changed": username}
+
+
+# ---------- 用户管理（管理员） ----------
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+
+
+@router.get(route("/users"), dependencies=[_require_auth])
+def list_users() -> dict:
+    """列出所有用户名（不返回 hash）。"""
+    return {"users": list(settings.users.keys())}
+
+
+@router.post(route("/users"), dependencies=[_require_auth])
+def add_user(req: UserCreateRequest) -> dict:
+    """新增用户。"""
+    if len(req.password) < 6:
+        raise AuthError("密码至少 6 位", status_code=400)
+    try:
+        settings.add_user(req.username, req.password)
+    except ValueError as e:
+        raise AuthError(str(e), status_code=400)
+    return {"created": req.username}
+
+
+@router.delete(route("/users/{username}"), dependencies=[_require_auth])
+def delete_user(username: str) -> dict:
+    """删除用户（至少保留一个）。"""
+    try:
+        settings.delete_user(username)
+    except ValueError as e:
+        raise AuthError(str(e), status_code=400)
+    return {"deleted": username}

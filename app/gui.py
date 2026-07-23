@@ -1,7 +1,7 @@
 """服务端 PySide6 GUI 窗口。
 
 启动时弹出窗口，后台线程运行 uvicorn 服务；窗口内展示运行状态、整合包/模组列表，
-支持上传/删除，并可一键打开网页管理页面。写操作需先登录获取 token。
+支持上传/删除/编辑/上下架，并可管理用户、修改密码。写操作需先登录获取 token。
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Any
 from PySide6.QtCore import Qt, QThread, QTimer, Signal, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -87,10 +89,7 @@ def build_multipart(fields: dict[str, str], file_path: str) -> tuple[bytes, str]
 
 # ---------- 通用 HTTP 请求工作线程 ----------
 class ApiWorker(QThread):
-    """在工作线程中执行 HTTP 请求，通过信号返回结果。
-
-    ok=True 时 result 为解析后的 JSON；ok=False 时 result 为错误信息字符串。
-    """
+    """在工作线程中执行 HTTP 请求，通过信号返回结果。"""
 
     done = Signal(bool, object)
 
@@ -127,8 +126,6 @@ class ApiWorker(QThread):
 
 # ---------- 登录对话框 ----------
 class LoginDialog(QDialog):
-    """登录对话框，调用 /api/v1/auth/login 获取 token。"""
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("服务端管理登录")
@@ -183,11 +180,11 @@ class LoginDialog(QDialog):
             QMessageBox.warning(self, "登录失败", str(result))
 
 
-# ---------- 元数据输入对话框 ----------
+# ---------- 整合包元数据对话框（上传 / 编辑通用） ----------
 class ModpackMetaDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, existing: dict | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("整合包信息")
+        self.setWindowTitle("编辑整合包" if existing else "整合包信息")
         self.setFixedWidth(340)
         form = QFormLayout(self)
         self.name = QLineEdit(); self.name.setPlaceholderText("TestPack")
@@ -197,6 +194,17 @@ class ModpackMetaDialog(QDialog):
         self.loader = QComboBox(); self.loader.addItems(["vanilla", "forge", "fabric", "quilt"])
         self.loader_ver = QLineEdit(); self.loader_ver.setPlaceholderText("可选")
         self.desc = QLineEdit(); self.desc.setPlaceholderText("可选")
+        self.enabled = QCheckBox("上架（取消勾选则下架，客户端同步不到）")
+        self.enabled.setChecked(True)
+        if existing:
+            self.name.setText(existing.get("name", ""))
+            self.version.setText(existing.get("version", ""))
+            self.game.setText(existing.get("game", "minecraft"))
+            self.game_version.setText(existing.get("game_version", ""))
+            self.loader.setCurrentText(existing.get("mod_loader", "vanilla"))
+            self.loader_ver.setText(existing.get("mod_loader_version") or "")
+            self.desc.setText(existing.get("description", ""))
+            self.enabled.setChecked(existing.get("enabled", True))
         form.addRow("名称*:", self.name)
         form.addRow("版本*:", self.version)
         form.addRow("游戏*:", self.game)
@@ -204,12 +212,13 @@ class ModpackMetaDialog(QDialog):
         form.addRow("加载器:", self.loader)
         form.addRow("加载器版本:", self.loader_ver)
         form.addRow("描述:", self.desc)
+        form.addRow(self.enabled)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         form.addRow(bb)
 
-    def values(self) -> dict[str, str] | None:
+    def values(self) -> dict[str, Any] | None:
         if not (self.name.text().strip() and self.version.text().strip()
                 and self.game.text().strip() and self.game_version.text().strip()):
             return None
@@ -221,29 +230,40 @@ class ModpackMetaDialog(QDialog):
             "mod_loader": self.loader.currentText(),
             "mod_loader_version": self.loader_ver.text().strip(),
             "description": self.desc.text().strip(),
+            "enabled": self.enabled.isChecked(),
         }
 
 
+# ---------- 模组元数据对话框（上传 / 编辑通用） ----------
 class ModMetaDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, existing: dict | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("模组信息")
+        self.setWindowTitle("编辑模组" if existing else "模组信息")
         self.setFixedWidth(340)
         form = QFormLayout(self)
         self.name = QLineEdit(); self.name.setPlaceholderText("ExampleMod")
         self.version = QLineEdit(); self.version.setPlaceholderText("1.0")
         self.game = QLineEdit("minecraft")
         self.desc = QLineEdit(); self.desc.setPlaceholderText("可选")
+        self.enabled = QCheckBox("上架")
+        self.enabled.setChecked(True)
+        if existing:
+            self.name.setText(existing.get("name", ""))
+            self.version.setText(existing.get("version", ""))
+            self.game.setText(existing.get("game", "minecraft"))
+            self.desc.setText(existing.get("description", ""))
+            self.enabled.setChecked(existing.get("enabled", True))
         form.addRow("名称*:", self.name)
         form.addRow("版本*:", self.version)
         form.addRow("游戏*:", self.game)
         form.addRow("描述:", self.desc)
+        form.addRow(self.enabled)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         form.addRow(bb)
 
-    def values(self) -> dict[str, str] | None:
+    def values(self) -> dict[str, Any] | None:
         if not (self.name.text().strip() and self.version.text().strip()
                 and self.game.text().strip()):
             return None
@@ -252,13 +272,77 @@ class ModMetaDialog(QDialog):
             "version": self.version.text().strip(),
             "game": self.game.text().strip(),
             "description": self.desc.text().strip(),
+            "enabled": self.enabled.isChecked(),
         }
+
+
+# ---------- 改密码对话框 ----------
+class ChangePasswordDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("修改密码")
+        self.setFixedWidth(340)
+        self._worker: ApiWorker | None = None
+        form = QFormLayout(self)
+        self.old_pwd = QLineEdit(); self.old_pwd.setEchoMode(QLineEdit.Password)
+        self.new_pwd = QLineEdit(); self.new_pwd.setEchoMode(QLineEdit.Password)
+        self.new_pwd.setPlaceholderText("至少6位")
+        self.confirm = QLineEdit(); self.confirm.setEchoMode(QLineEdit.Password)
+        form.addRow("原密码:", self.old_pwd)
+        form.addRow("新密码:", self.new_pwd)
+        form.addRow("确认新密码:", self.confirm)
+        self.msg = QLabel("")
+        self.msg.setStyleSheet("color: #ef4444; font-size: 12px;")
+        form.addRow(self.msg)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self._on_ok)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+
+    def _on_ok(self) -> None:
+        if self.new_pwd.text() != self.confirm.text():
+            self.msg.setText("两次新密码不一致")
+            return
+        if len(self.new_pwd.text()) < 6:
+            self.msg.setText("新密码至少 6 位")
+            return
+        self.msg.setText("")
+
+    def build_request(self, token: str) -> tuple[ApiWorker, str]:
+        body = json.dumps({
+            "old_password": self.old_pwd.text(),
+            "new_password": self.new_pwd.text(),
+        }).encode()
+        w = ApiWorker("PUT", "/api/v1/auth/password", token=token, data=body,
+                      headers={"Content-Type": "application/json"})
+        return w, "改密码请求已发出"
+
+
+# ---------- 添加用户对话框 ----------
+class AddUserDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("添加用户")
+        self.setFixedWidth(320)
+        form = QFormLayout(self)
+        self.username = QLineEdit()
+        self.password = QLineEdit(); self.password.setEchoMode(QLineEdit.Password)
+        self.password.setPlaceholderText("至少6位")
+        form.addRow("用户名:", self.username)
+        form.addRow("密码:", self.password)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+
+    def values(self) -> tuple[str, str] | None:
+        if not self.username.text().strip() or len(self.password.text()) < 6:
+            return None
+        return self.username.text().strip(), self.password.text()
 
 
 # ---------- 上传工作线程 ----------
 class UploadWorker(QThread):
-    """构造 multipart 并上传文件。"""
-
     done = Signal(bool, object)
 
     def __init__(self, path: str, token: str, fields: dict[str, str], file_path: str) -> None:
@@ -300,10 +384,10 @@ class ServerWindow(QMainWindow):
         super().__init__()
         self.server_thread = server_thread
         self.token: str | None = None
-        # 持有 worker 引用避免被 GC
+        self.current_user: str = ""
         self._workers: list = []
         self.setWindowTitle("GPM 服务端管理")
-        self.resize(900, 600)
+        self.resize(950, 640)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -323,9 +407,12 @@ class ServerWindow(QMainWindow):
         top.addStretch()
         self.open_web_btn = QPushButton("打开网页管理")
         self.open_web_btn.clicked.connect(self._open_web)
+        self.change_pwd_btn = QPushButton("改密码")
+        self.change_pwd_btn.clicked.connect(self._change_password)
         self.login_btn = QPushButton("登录")
         self.login_btn.clicked.connect(self._show_login)
         top.addWidget(self.open_web_btn)
+        top.addWidget(self.change_pwd_btn)
         top.addWidget(self.login_btn)
         root.addLayout(top)
 
@@ -347,33 +434,53 @@ class ServerWindow(QMainWindow):
 
         # 选项卡
         self.tabs = QTabWidget()
-        self.modpack_table = self._make_table(["ID", "名称", "版本", "游戏", "游戏版本", "加载器", "大小"])
+        # 整合包
+        self.modpack_table = self._make_table(["ID", "名称", "版本", "游戏", "游戏版本", "加载器", "大小", "状态"])
         mp_tab = QWidget(); mp_layout = QVBoxLayout(mp_tab)
         mp_btns = QHBoxLayout()
         self.mp_upload_btn = QPushButton("上传整合包"); self.mp_upload_btn.clicked.connect(self._upload_modpack)
+        self.mp_edit_btn = QPushButton("编辑选中"); self.mp_edit_btn.clicked.connect(self._edit_modpack)
+        self.mp_toggle_btn = QPushButton("上架/下架"); self.mp_toggle_btn.clicked.connect(self._toggle_modpack)
         self.mp_del_btn = QPushButton("删除选中"); self.mp_del_btn.clicked.connect(self._delete_modpack)
         self.mp_refresh_btn = QPushButton("刷新"); self.mp_refresh_btn.clicked.connect(self._load_modpacks)
-        mp_btns.addWidget(self.mp_upload_btn); mp_btns.addWidget(self.mp_del_btn)
+        for b in (self.mp_upload_btn, self.mp_edit_btn, self.mp_toggle_btn, self.mp_del_btn):
+            mp_btns.addWidget(b)
         mp_btns.addStretch(); mp_btns.addWidget(self.mp_refresh_btn)
         mp_layout.addLayout(mp_btns); mp_layout.addWidget(self.modpack_table)
         self.tabs.addTab(mp_tab, "整合包管理")
 
-        self.mod_table = self._make_table(["ID", "名称", "版本", "游戏", "大小"])
+        # 模组
+        self.mod_table = self._make_table(["ID", "名称", "版本", "游戏", "大小", "状态"])
         mod_tab = QWidget(); mod_layout = QVBoxLayout(mod_tab)
         mod_btns = QHBoxLayout()
         self.mod_upload_btn = QPushButton("上传模组"); self.mod_upload_btn.clicked.connect(self._upload_mod)
+        self.mod_edit_btn = QPushButton("编辑选中"); self.mod_edit_btn.clicked.connect(self._edit_mod)
+        self.mod_toggle_btn = QPushButton("上架/下架"); self.mod_toggle_btn.clicked.connect(self._toggle_mod)
         self.mod_del_btn = QPushButton("删除选中"); self.mod_del_btn.clicked.connect(self._delete_mod)
         self.mod_refresh_btn = QPushButton("刷新"); self.mod_refresh_btn.clicked.connect(self._load_mods)
-        mod_btns.addWidget(self.mod_upload_btn); mod_btns.addWidget(self.mod_del_btn)
+        for b in (self.mod_upload_btn, self.mod_edit_btn, self.mod_toggle_btn, self.mod_del_btn):
+            mod_btns.addWidget(b)
         mod_btns.addStretch(); mod_btns.addWidget(self.mod_refresh_btn)
         mod_layout.addLayout(mod_btns); mod_layout.addWidget(self.mod_table)
         self.tabs.addTab(mod_tab, "模组管理")
+
+        # 用户管理
+        user_tab = QWidget(); user_layout = QVBoxLayout(user_tab)
+        user_btns = QHBoxLayout()
+        self.user_add_btn = QPushButton("添加用户"); self.user_add_btn.clicked.connect(self._add_user)
+        self.user_del_btn = QPushButton("删除选中"); self.user_del_btn.clicked.connect(self._del_user)
+        self.user_refresh_btn = QPushButton("刷新"); self.user_refresh_btn.clicked.connect(self._load_users)
+        user_btns.addWidget(self.user_add_btn); user_btns.addWidget(self.user_del_btn)
+        user_btns.addStretch(); user_btns.addWidget(self.user_refresh_btn)
+        user_layout.addLayout(user_btns)
+        self.user_list = QListWidget()
+        user_layout.addWidget(self.user_list)
+        self.tabs.addTab(user_tab, "用户管理")
         root.addWidget(self.tabs)
 
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("就绪。写操作需先登录。")
 
-        # 定时刷新
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh_status)
         self.timer.start(10000)
@@ -394,7 +501,8 @@ class ServerWindow(QMainWindow):
         dlg = LoginDialog(self)
         if dlg.exec() == QDialog.Accepted and dlg.token:
             self.token = dlg.token
-            self.login_btn.setText("已登录")
+            self.current_user = dlg.user_edit.text().strip()
+            self.login_btn.setText(f"已登录: {self.current_user}")
             self.login_btn.setEnabled(False)
             self.statusBar().showMessage("登录成功", 3000)
 
@@ -406,6 +514,29 @@ class ServerWindow(QMainWindow):
 
     def _open_web(self) -> None:
         QDesktopServices.openUrl(QUrl(f"http://127.0.0.1:{settings.port}/admin"))
+
+    def _change_password(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        dlg = ChangePasswordDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        w, _ = dlg.build_request(token)
+
+        def _cb(ok: bool, result: Any) -> None:
+            if ok:
+                QMessageBox.information(self, "成功", "密码已修改，请重新登录")
+                self.token = None
+                self.current_user = ""
+                self.login_btn.setText("登录")
+                self.login_btn.setEnabled(True)
+            else:
+                QMessageBox.warning(self, "失败", str(result))
+
+        w.done.connect(_cb)
+        self._workers.append(w)
+        w.start()
 
     # --- 刷新状态 ---
     def _refresh_status(self) -> None:
@@ -442,7 +573,7 @@ class ServerWindow(QMainWindow):
         for r, m in enumerate(items):
             vals = [m.get("id", "")[:8], m.get("name", ""), m.get("version", ""),
                     m.get("game", ""), m.get("game_version", ""), m.get("mod_loader", ""),
-                    fmt_bytes(m.get("file_size"))]
+                    fmt_bytes(m.get("file_size")), "上架" if m.get("enabled", True) else "下架"]
             for c, v in enumerate(vals):
                 self.modpack_table.setItem(r, c, QTableWidgetItem(str(v)))
             self.modpack_table.item(r, 0).setToolTip(m.get("id", ""))
@@ -462,6 +593,65 @@ class ServerWindow(QMainWindow):
             QMessageBox.warning(self, "缺少必填", "名称/版本/游戏/游戏版本必填")
             return
         self._do_upload(meta, file_path, "/api/v1/modpacks", "整合包", self._load_modpacks)
+
+    def _edit_modpack(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        row = self.modpack_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "提示", "请先选中一行")
+            return
+        full_id = self.modpack_table.item(row, 0).toolTip()
+        # 先拉详情
+        w = ApiWorker("GET", f"/api/v1/modpacks/{full_id}")
+
+        def _on_get(ok: bool, result: Any) -> None:
+            if not ok or not isinstance(result, dict):
+                QMessageBox.warning(self, "失败", "获取详情失败: " + str(result))
+                return
+            dlg = ModpackMetaDialog(self, existing=result)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            meta = dlg.values()
+            if meta is None:
+                QMessageBox.warning(self, "缺少必填", "名称/版本/游戏/游戏版本必填")
+                return
+            body = json.dumps(meta).encode()
+            pw = ApiWorker("PATCH", f"/api/v1/modpacks/{full_id}", token=token, data=body,
+                           headers={"Content-Type": "application/json"})
+
+            def _on_patch(ok2: bool, r2: Any) -> None:
+                if ok2:
+                    self.statusBar().showMessage("整合包已更新", 3000)
+                    self._load_modpacks()
+                else:
+                    QMessageBox.warning(self, "失败", str(r2))
+
+            pw.done.connect(_on_patch)
+            self._workers.append(pw)
+            pw.start()
+
+        w.done.connect(_on_get)
+        self._workers.append(w)
+        w.start()
+
+    def _toggle_modpack(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        row = self.modpack_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "提示", "请先选中一行")
+            return
+        full_id = self.modpack_table.item(row, 0).toolTip()
+        cur = self.modpack_table.item(row, 7).text() == "上架"
+        body = json.dumps({"enabled": not cur}).encode()
+        w = ApiWorker("PATCH", f"/api/v1/modpacks/{full_id}", token=token, data=body,
+                      headers={"Content-Type": "application/json"})
+        w.done.connect(lambda ok, r: self._on_toggled(ok, r, "整合包", self._load_modpacks))
+        self._workers.append(w)
+        w.start()
 
     def _delete_modpack(self) -> None:
         token = self._require_token()
@@ -493,7 +683,8 @@ class ServerWindow(QMainWindow):
         self.mod_table.setRowCount(len(items))
         for r, m in enumerate(items):
             vals = [m.get("id", "")[:8], m.get("name", ""), m.get("version", ""),
-                    m.get("game", ""), fmt_bytes(m.get("file_size"))]
+                    m.get("game", ""), fmt_bytes(m.get("file_size")),
+                    "上架" if m.get("enabled", True) else "下架"]
             for c, v in enumerate(vals):
                 self.mod_table.setItem(r, c, QTableWidgetItem(str(v)))
             self.mod_table.item(r, 0).setToolTip(m.get("id", ""))
@@ -514,6 +705,64 @@ class ServerWindow(QMainWindow):
             return
         self._do_upload(meta, file_path, "/api/v1/mods", "模组", self._load_mods)
 
+    def _edit_mod(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        row = self.mod_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "提示", "请先选中一行")
+            return
+        full_id = self.mod_table.item(row, 0).toolTip()
+        w = ApiWorker("GET", f"/api/v1/mods/{full_id}")
+
+        def _on_get(ok: bool, result: Any) -> None:
+            if not ok or not isinstance(result, dict):
+                QMessageBox.warning(self, "失败", "获取详情失败: " + str(result))
+                return
+            dlg = ModMetaDialog(self, existing=result)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            meta = dlg.values()
+            if meta is None:
+                QMessageBox.warning(self, "缺少必填", "名称/版本/游戏必填")
+                return
+            body = json.dumps(meta).encode()
+            pw = ApiWorker("PATCH", f"/api/v1/mods/{full_id}", token=token, data=body,
+                           headers={"Content-Type": "application/json"})
+
+            def _on_patch(ok2: bool, r2: Any) -> None:
+                if ok2:
+                    self.statusBar().showMessage("模组已更新", 3000)
+                    self._load_mods()
+                else:
+                    QMessageBox.warning(self, "失败", str(r2))
+
+            pw.done.connect(_on_patch)
+            self._workers.append(pw)
+            pw.start()
+
+        w.done.connect(_on_get)
+        self._workers.append(w)
+        w.start()
+
+    def _toggle_mod(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        row = self.mod_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "提示", "请先选中一行")
+            return
+        full_id = self.mod_table.item(row, 0).toolTip()
+        cur = self.mod_table.item(row, 5).text() == "上架"
+        body = json.dumps({"enabled": not cur}).encode()
+        w = ApiWorker("PATCH", f"/api/v1/mods/{full_id}", token=token, data=body,
+                      headers={"Content-Type": "application/json"})
+        w.done.connect(lambda ok, r: self._on_toggled(ok, r, "模组", self._load_mods))
+        self._workers.append(w)
+        w.start()
+
     def _delete_mod(self) -> None:
         token = self._require_token()
         if not token:
@@ -530,11 +779,83 @@ class ServerWindow(QMainWindow):
         self._workers.append(w)
         w.start()
 
-    # --- 通用上传回调 ---
-    def _do_upload(self, meta: dict[str, str], file_path: str, path: str,
+    # --- 用户管理 ---
+    def _load_users(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        w = ApiWorker("GET", "/api/v1/users", token=token)
+        w.done.connect(self._on_users)
+        self._workers.append(w)
+        w.start()
+
+    def _on_users(self, ok: bool, result: Any) -> None:
+        if not ok or not isinstance(result, dict):
+            self.user_list.clear()
+            return
+        self.user_list.clear()
+        for u in result.get("users", []):
+            label = u + (" （当前）" if u == self.current_user else "")
+            self.user_list.addItem(label)
+
+    def _add_user(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        dlg = AddUserDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        vals = dlg.values()
+        if vals is None:
+            QMessageBox.warning(self, "提示", "用户名不能空，密码至少6位")
+            return
+        username, password = vals
+        body = json.dumps({"username": username, "password": password}).encode()
+        w = ApiWorker("POST", "/api/v1/users", token=token, data=body,
+                      headers={"Content-Type": "application/json"})
+
+        def _cb(ok: bool, r: Any) -> None:
+            if ok:
+                self.statusBar().showMessage("用户已添加", 3000)
+                self._load_users()
+            else:
+                QMessageBox.warning(self, "失败", str(r))
+
+        w.done.connect(_cb)
+        self._workers.append(w)
+        w.start()
+
+    def _del_user(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        item = self.user_list.currentItem()
+        if not item:
+            QMessageBox.information(self, "提示", "请先选中一个用户")
+            return
+        username = item.text().replace(" （当前）", "")
+        if QMessageBox.question(self, "确认", f"确定删除用户 {username}？") != QMessageBox.Yes:
+            return
+        w = ApiWorker("DELETE", f"/api/v1/users/{username}", token=token)
+
+        def _cb(ok: bool, r: Any) -> None:
+            if ok:
+                self.statusBar().showMessage("用户已删除", 3000)
+                self._load_users()
+            else:
+                QMessageBox.warning(self, "失败", str(r))
+
+        w.done.connect(_cb)
+        self._workers.append(w)
+        w.start()
+
+    # --- 通用回调 ---
+    def _do_upload(self, meta: dict[str, Any], file_path: str, path: str,
                    kind: str, on_done) -> None:
         self.statusBar().showMessage(f"正在上传{kind}...")
-        w = UploadWorker(path, self.token or "", meta, file_path)
+        # 上传表单字段不含 enabled（上传默认上架）
+        fields = {k: str(v) for k, v in meta.items() if k != "enabled"}
+        w = UploadWorker(path, self.token or "", fields, file_path)
 
         def _cb(ok: bool, result: Any) -> None:
             if ok:
@@ -548,6 +869,13 @@ class ServerWindow(QMainWindow):
         w.done.connect(_cb)
         self._workers.append(w)
         w.start()
+
+    def _on_toggled(self, ok: bool, result: Any, kind: str, on_done) -> None:
+        if ok:
+            self.statusBar().showMessage(f"{kind}状态已切换", 3000)
+            on_done()
+        else:
+            QMessageBox.warning(self, "操作失败", str(result))
 
     def _on_deleted(self, ok: bool, result: Any, kind: str, on_done) -> None:
         if ok:
@@ -566,8 +894,6 @@ class ServerWindow(QMainWindow):
 
 # ---------- 服务线程 ----------
 class ServerThread(threading.Thread):
-    """在后台线程中运行 uvicorn 服务，支持优雅停止。"""
-
     def __init__(self) -> None:
         super().__init__(daemon=True)
         self.server = None
