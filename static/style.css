@@ -1,0 +1,261 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root { color-scheme: light; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f7fa;
+  color: #1f2933;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+button, a { touch-action: manipulation; }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #1e293b;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.logo {
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #cbd5e1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.model-tag {
+  background: #0ea5e9;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+section { margin-bottom: 32px; }
+h2 { font-size: 16px; margin-bottom: 12px; color: #334155; }
+
+/* ===== 指示灯系统 ===== */
+.light-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.05);
+  vertical-align: middle;
+}
+.light-dot.green  { background: #22c55e; box-shadow: 0 0 6px 1px rgba(34,197,94,0.6); animation: pulse-green 2s infinite; }
+.light-dot.yellow { background: #eab308; box-shadow: 0 0 6px 1px rgba(234,179,8,0.6); animation: pulse-yellow 1.2s infinite; }
+.light-dot.red    { background: #ef4444; box-shadow: 0 0 6px 1px rgba(239,68,68,0.7); animation: pulse-red 0.8s infinite; }
+.light-dot.off    { background: #94a3b8; }
+
+@keyframes pulse-green  { 0%,100%{opacity:1} 50%{opacity:0.55} }
+@keyframes pulse-yellow { 0%,100%{opacity:1} 50%{opacity:0.45} }
+@keyframes pulse-red    { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.15)} }
+
+.overall-light {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.overall-light .light-dot { width: 22px; height: 22px; }
+.overall-label { font-size: 14px; color: #64748b; }
+.overall-text { font-size: 18px; font-weight: 700; color: #0f172a; }
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 13px;
+  color: #475569;
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.legend-title { font-weight: 600; color: #334155; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-item .light-dot { width: 12px; height: 12px; }
+
+.kind-light-inline { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
+.kind-light-inline .light-dot { width: 11px; height: 11px; }
+
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+.stat-label { font-size: 12px; color: #64748b; margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+
+.reporter-card {
+  border-left: 4px solid #cbd5e1;
+  background: #fff; border-radius: 8px; padding: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.3s;
+}
+.reporter-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.reporter-card.online { border-left-color: #22c55e; }
+.reporter-card.offline { border-left-color: #ef4444; }
+
+.reporter-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.reporter-name { font-weight: 600; }
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.badge.online { background: #dcfce7; color: #166534; }
+.badge.offline { background: #fee2e2; color: #991b1b; }
+.badge.kind { background: #e0e7ff; color: #3730a3; margin-left: 6px; }
+
+.reporter-rows { font-size: 13px; color: #475569; }
+.reporter-rows div { display: flex; justify-content: space-between; padding: 2px 0; }
+.reporter-rows .k { color: #94a3b8; }
+
+.installed-list { margin-top: 6px; font-size: 12px; }
+.installed-list .chip {
+  display: inline-block;
+  background: #f1f5f9;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin: 2px 4px 2px 0;
+  color: #334155;
+}
+
+.game-block { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+.game-title { font-weight: 600; margin-bottom: 8px; color: #1e293b; text-transform: capitalize; }
+
+.item-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.item-table th, .item-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+.item-table th { color: #64748b; font-weight: 600; font-size: 12px; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #e0e7ff; color: #3730a3; }
+
+.empty { color: #94a3b8; font-size: 13px; padding: 16px; text-align: center; }
+
+.user-badge {
+  background: #334155;
+  color: #e2e8f0;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.logout-btn {
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid #475569;
+  padding: 3px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.logout-btn:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
+.logout-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.nav-link {
+  color: #3b82f6; text-decoration: none; font-size: 12px;
+  padding: 3px 12px; border: 1px solid #3b82f6; border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
+}
+.nav-link:hover { background: #3b82f6; color: #fff; }
+.nav-link:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+
+/* 尊重用户的减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===== 移动端响应式 ===== */
+@media (max-width: 768px) {
+  /* 顶栏 */
+  .topbar { padding: 8px 12px; }
+  .brand { gap: 8px; }
+  .title { font-size: 14px; }
+  .meta { width: 100%; justify-content: flex-start; gap: 8px; }
+
+  /* 容器 */
+  .container { padding: 12px; }
+  section { margin-bottom: 20px; }
+  h2 { font-size: 15px; }
+
+  /* 总体状态 */
+  .overall-light { padding: 14px 16px; flex-wrap: wrap; }
+  .overall-text { font-size: 16px; }
+
+  /* 统计卡片：2 列 */
+  .summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-value { font-size: 20px; }
+
+  /* 图例：可滚动 */
+  .legend { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
+
+  /* 网格：单列 */
+  .grid { grid-template-columns: 1fr; gap: 10px; }
+  .reporter-card { padding: 12px; }
+  .reporter-head { flex-wrap: wrap; gap: 6px; }
+  .reporter-name { font-size: 15px; }
+
+  /* 游戏区块 */
+  .game-block { padding: 12px; }
+  .item-table { font-size: 12px; }
+  .item-table th, .item-table td { padding: 4px 6px; }
+}
+
+@media (max-width: 480px) {
+  .title { font-size: 13px; }
+  .summary { grid-template-columns: 1fr 1fr; }
+  .stat-value { font-size: 18px; }
+  .stat-label { font-size: 11px; }
+  .container { padding: 8px; }
+  .logout-btn, .nav-link { padding: 3px 8px; font-size: 11px; }
+  .user-badge { padding: 2px 8px; font-size: 11px; }
+}
