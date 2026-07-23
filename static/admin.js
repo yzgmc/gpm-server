@@ -259,12 +259,23 @@ async function loadUsers() {
     const tbody = document.getElementById('userTbody');
     const users = d.users || [];
     const me = localStorage.getItem(USER_KEY);
-    tbody.innerHTML = users.map(u => `
-      <tr>
-        <td>${u}${u === me ? ' <span class="badge-on">当前</span>' : ''}</td>
-        <td>${users.length <= 1 ? '<span style="color:#94a3b8">无法删除最后一个用户</span>' : `<button class="btn-del" onclick="delUser('${u}')" ${u === me ? 'disabled' : ''}>删除</button>`}</td>
-      </tr>`).join('');
+    tbody.innerHTML = users.map(u => {
+      const isAdmin = u.role === 'admin';
+      const roleBadge = isAdmin ? '<span class="badge-on">管理员</span>' : '<span class="badge-off">普通</span>';
+      const toggleBtn = `<button class="btn-toggle" onclick="toggleRole('${u.username}', '${isAdmin ? 'user' : 'admin'}')">${isAdmin ? '降为普通' : '升为管理员'}</button>`;
+      const delBtn = `<button class="btn-del" onclick="delUser('${u.username}')" ${u.username === me ? 'disabled' : ''}>删除</button>`;
+      return `<tr>
+        <td>${u.username}${u.username === me ? ' <span class="badge-on">当前</span>' : ''}</td>
+        <td>${roleBadge}</td>
+        <td>${toggleBtn} ${delBtn}</td>
+      </tr>`;
+    }).join('');
   } catch (e) { console.error(e); }
+}
+async function toggleRole(u, role) {
+  const res = await api('/api/v1/users/' + u, { method: 'PATCH', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) });
+  if (res && res.ok) loadUsers();
+  else { const e = await res.json().catch(() => ({})); alert('操作失败: ' + (e.error || res.status)); }
 }
 async function delUser(u) {
   if (!confirm('确定删除用户 ' + u + '？')) return;
@@ -277,11 +288,11 @@ document.getElementById('addUserForm').addEventListener('submit', async (e) => {
   const msg = document.getElementById('userMsg');
   btn.disabled = true; msg.className = 'form-msg'; msg.textContent = '';
   const fd = new FormData(e.target);
-  const body = { username: fd.get('username'), password: fd.get('password') };
+  const body = { username: fd.get('username'), password: fd.get('password'), is_admin: fd.get('is_admin') === 'on' };
   try {
     const res = await api('/api/v1/users', { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
-    if (res.ok) { msg.className = 'form-msg ok'; msg.textContent = '已添加'; e.target.reset(); loadUsers(); }
+    if (res.ok) { msg.className = 'form-msg ok'; msg.textContent = '已添加' + (data.role === 'admin' ? '（管理员）' : ''); e.target.reset(); loadUsers(); }
     else { msg.className = 'form-msg err'; msg.textContent = data.error || '添加失败'; }
   } catch (err) { msg.className = 'form-msg err'; msg.textContent = '网络错误：' + err; }
   btn.disabled = false;

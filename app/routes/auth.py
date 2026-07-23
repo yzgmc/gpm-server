@@ -36,11 +36,12 @@ class LoginResponse(BaseModel):
 @router.post(route("/auth/login"), response_model=LoginResponse)
 def login(req: LoginRequest) -> LoginResponse:
     """校验用户名密码，签发 JWT。"""
-    stored = settings.users.get(req.username)
-    if not stored or not verify_password(req.password, stored):
+    stored_hash = settings.user_hash(req.username)
+    if not stored_hash or not verify_password(req.password, stored_hash):
         raise AuthError("用户名或密码错误", status_code=401)
-    token = create_token({"sub": req.username, "role": "admin"}, settings.auth_secret)
-    return LoginResponse(token=token, username=req.username, role="admin", expires_in=86400)
+    role = settings.user_role(req.username) or "user"
+    token = create_token({"sub": req.username, "role": role}, settings.auth_secret)
+    return LoginResponse(token=token, username=req.username, role=role, expires_in=86400)
 
 
 # ---------- 改自己的密码 ----------
@@ -56,9 +57,10 @@ def change_password(req: ChangePasswordRequest, request: Request) -> dict:
     token = auth.split(" ", 1)[1] if auth.startswith("Bearer ") else ""
     payload = decode_token(token, settings.auth_secret)
     username = getattr(payload, "sub", "")
-    if not username or username not in settings.users:
+    stored_hash = settings.user_hash(username)
+    if not username or not stored_hash:
         raise AuthError("用户不存在", status_code=401)
-    if not verify_password(req.old_password, settings.users[username]):
+    if not verify_password(req.old_password, stored_hash):
         raise AuthError("原密码错误", status_code=401)
     if len(req.new_password) < 6:
         raise AuthError("新密码至少 6 位", status_code=400)
@@ -70,29 +72,45 @@ def change_password(req: ChangePasswordRequest, request: Request) -> dict:
 class UserCreateRequest(BaseModel):
     username: str
     password: str
+    is_admin: bool = False
+
+
+class UserRoleUpdate(BaseModel):
+    role: str  # "admin" | "user"
 
 
 @router.get(route("/users"), dependencies=[_require_auth])
 def list_users() -> dict:
-    """列出所有用户名（不返回 hash）。"""
-    return {"users": list(settings.users.keys())}
+    """列出所有用户名及角色（不返回 hash）。"""
+    users = settings.users
+    return {"users": [{"username": u, "role": d["role"]} for u, d in users.items()]}
 
 
 @router.post(route("/users"), dependencies=[_require_auth])
 def add_user(req: UserCreateRequest) -> dict:
-    """新增用户。"""
+    """新增用户，可指定是否管理员。"""
     if len(req.password) < 6:
         raise AuthError("密码至少 6 位", status_code=400)
     try:
-        settings.add_user(req.username, req.password)
+        settings.add_user(req.username, req.password, role="admin" if req.is_admin else "user")
     except ValueError as e:
         raise AuthError(str(e), status_code=400)
-    return {"created": req.username}
+    return {"created": req.username, "role": "admin" if req.is_admin else "user"}
+
+
+@router.patch(route("/users/{username}"), dependencies=[_require_auth])
+def update_user_role(username: str, req: UserRoleUpdate) -> dict:
+    """修改用户角色（admin / user）。"""
+    try:
+        settings.set_role(username, req.role)
+    except ValueError as e:
+        raise AuthError(str(e), status_code=400)
+    return {"username": username, "role": req.role}
 
 
 @router.delete(route("/users/{username}"), dependencies=[_require_auth])
 def delete_user(username: str) -> dict:
-    """删除用户（至少保留一个）。"""
+    """删除用户（至少保留一个管理员）。"""
     try:
         settings.delete_user(username)
     except ValueError as e:

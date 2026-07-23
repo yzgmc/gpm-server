@@ -64,6 +64,8 @@ def _build_heartbeat() -> Heartbeat:
             # 携带完整条目，供 web-admin 聚合推送条目视图
             "modpacks": [m.model_dump(mode="json") for m in modpacks],
             "mods": [m.model_dump(mode="json") for m in mods],
+            # 携带管理员账号（用户名+hash），供 web-admin 同步登录用户
+            "admin_users": settings.admin_users(),
             # 灯色冗余放进 metrics，便于后台前端直接读取
             "light_level": light.level,
             "light_reason": light.reason,

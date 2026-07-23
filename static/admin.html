@@ -101,12 +101,14 @@
         <div class="form-row">
           <label>用户名<input type="text" name="username" placeholder="newuser" required /></label>
           <label>密码<input type="password" name="password" placeholder="至少6位" required /></label>
+          <label style="flex:0 0 auto; align-self:flex-end;"><input type="checkbox" name="is_admin" /> 设为管理员</label>
         </div>
         <button type="submit" class="btn-upload" id="addUserBtn">添加用户</button>
         <span id="userMsg" class="form-msg"></span>
+        <div class="hint" style="margin-top:8px;">管理员账号会自动同步到网页后台，可用同一账号密码登录后台。</div>
       </form>
       <table class="data-table">
-        <thead><tr><th>用户名</th><th>操作</th></tr></thead>
+        <thead><tr><th>用户名</th><th>角色</th><th>操作</th></tr></thead>
         <tbody id="userTbody"></tbody>
       </table>
     </section>

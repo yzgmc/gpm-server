@@ -328,17 +328,19 @@ class AddUserDialog(QDialog):
         self.username = QLineEdit()
         self.password = QLineEdit(); self.password.setEchoMode(QLineEdit.Password)
         self.password.setPlaceholderText("至少6位")
+        self.is_admin = QCheckBox("设为管理员（可登录网页后台）")
         form.addRow("用户名:", self.username)
         form.addRow("密码:", self.password)
+        form.addRow(self.is_admin)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         form.addRow(bb)
 
-    def values(self) -> tuple[str, str] | None:
+    def values(self) -> tuple[str, str, bool] | None:
         if not self.username.text().strip() or len(self.password.text()) < 6:
             return None
-        return self.username.text().strip(), self.password.text()
+        return self.username.text().strip(), self.password.text(), self.is_admin.isChecked()
 
 
 # ---------- 上传工作线程 ----------
@@ -468,13 +470,15 @@ class ServerWindow(QMainWindow):
         user_tab = QWidget(); user_layout = QVBoxLayout(user_tab)
         user_btns = QHBoxLayout()
         self.user_add_btn = QPushButton("添加用户"); self.user_add_btn.clicked.connect(self._add_user)
+        self.user_toggle_btn = QPushButton("切换角色"); self.user_toggle_btn.clicked.connect(self._toggle_user_role)
         self.user_del_btn = QPushButton("删除选中"); self.user_del_btn.clicked.connect(self._del_user)
         self.user_refresh_btn = QPushButton("刷新"); self.user_refresh_btn.clicked.connect(self._load_users)
-        user_btns.addWidget(self.user_add_btn); user_btns.addWidget(self.user_del_btn)
+        user_btns.addWidget(self.user_add_btn); user_btns.addWidget(self.user_toggle_btn)
+        user_btns.addWidget(self.user_del_btn)
         user_btns.addStretch(); user_btns.addWidget(self.user_refresh_btn)
         user_layout.addLayout(user_btns)
-        self.user_list = QListWidget()
-        user_layout.addWidget(self.user_list)
+        self.user_table = self._make_table(["用户名", "角色"])
+        user_layout.addWidget(self.user_table)
         self.tabs.addTab(user_tab, "用户管理")
 
         # 配置
@@ -815,12 +819,17 @@ class ServerWindow(QMainWindow):
 
     def _on_users(self, ok: bool, result: Any) -> None:
         if not ok or not isinstance(result, dict):
-            self.user_list.clear()
             return
-        self.user_list.clear()
-        for u in result.get("users", []):
-            label = u + (" （当前）" if u == self.current_user else "")
-            self.user_list.addItem(label)
+        users = result.get("users", [])
+        self.user_table.setRowCount(len(users))
+        for r, u in enumerate(users):
+            # API 返回 {username, role} 列表
+            uname = u.get("username", u) if isinstance(u, dict) else u
+            role = u.get("role", "user") if isinstance(u, dict) else "user"
+            label = uname + (" （当前）" if uname == self.current_user else "")
+            role_text = "管理员" if role == "admin" else "普通"
+            self.user_table.setItem(r, 0, QTableWidgetItem(label))
+            self.user_table.setItem(r, 1, QTableWidgetItem(role_text))
 
     def _add_user(self) -> None:
         token = self._require_token()
@@ -833,8 +842,8 @@ class ServerWindow(QMainWindow):
         if vals is None:
             QMessageBox.warning(self, "提示", "用户名不能空，密码至少6位")
             return
-        username, password = vals
-        body = json.dumps({"username": username, "password": password}).encode()
+        username, password, is_admin = vals
+        body = json.dumps({"username": username, "password": password, "is_admin": is_admin}).encode()
         w = ApiWorker("POST", "/api/v1/users", token=token, data=body,
                       headers={"Content-Type": "application/json"})
 
@@ -849,15 +858,41 @@ class ServerWindow(QMainWindow):
         self._workers.append(w)
         w.start()
 
+    def _toggle_user_role(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        row = self.user_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "提示", "请先选中一个用户")
+            return
+        username = self.user_table.item(row, 0).text().replace(" （当前）", "")
+        cur_role = self.user_table.item(row, 1).text()
+        new_role = "user" if cur_role == "管理员" else "admin"
+        body = json.dumps({"role": new_role}).encode()
+        w = ApiWorker("PATCH", f"/api/v1/users/{username}", token=token, data=body,
+                      headers={"Content-Type": "application/json"})
+
+        def _cb(ok: bool, r: Any) -> None:
+            if ok:
+                self.statusBar().showMessage("角色已切换", 3000)
+                self._load_users()
+            else:
+                QMessageBox.warning(self, "失败", str(r))
+
+        w.done.connect(_cb)
+        self._workers.append(w)
+        w.start()
+
     def _del_user(self) -> None:
         token = self._require_token()
         if not token:
             return
-        item = self.user_list.currentItem()
-        if not item:
+        row = self.user_table.currentRow()
+        if row < 0:
             QMessageBox.information(self, "提示", "请先选中一个用户")
             return
-        username = item.text().replace(" （当前）", "")
+        username = self.user_table.item(row, 0).text().replace(" （当前）", "")
         if QMessageBox.question(self, "确认", f"确定删除用户 {username}？") != QMessageBox.Yes:
             return
         w = ApiWorker("DELETE", f"/api/v1/users/{username}", token=token)

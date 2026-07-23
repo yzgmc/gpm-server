@@ -99,25 +99,34 @@ class Settings:
             return dict(self._runtime)
 
     # ---------- 用户持久化 ----------
-    def _load_users(self) -> dict[str, str]:
-        """优先读 users.json；不存在则用默认 admin/admin123 并写入文件。"""
+    # 存储格式: {username: {"hash": "<pbkdf2_hash>", "role": "admin"|"user"}}
+    def _load_users(self) -> dict[str, dict]:
+        """优先读 users.json；不存在则用默认 admin/admin123 并写入文件。
+        兼容旧格式（value 为纯 hash 字符串）自动迁移。"""
         if os.getenv("GPM_USERS"):
             # 显式指定则不持久化（只读环境变量）
             return self._parse_users_env(os.getenv("GPM_USERS", ""))
         if os.path.exists(self._users_file):
             try:
                 with open(self._users_file, "r", encoding="utf-8") as f:
-                    users = json.load(f)
-                if users:
+                    raw = json.load(f)
+                if raw:
+                    # 迁移旧格式：value 为字符串 -> {"hash": str, "role": ...}
+                    users = {}
+                    for k, v in raw.items():
+                        if isinstance(v, str):
+                            users[k] = {"hash": v, "role": "admin" if k == "admin" else "user"}
+                        else:
+                            users[k] = v
                     return users
             except (OSError, json.JSONDecodeError):
                 pass
-        # 默认管理员：admin / admin123
-        default = {"admin": hash_password("admin123")}
+        # 默认管理员：admin / admin123（管理员角色）
+        default = {"admin": {"hash": hash_password("admin123"), "role": "admin"}}
         self._save_users(default)
         return default
 
-    def _save_users(self, users: dict[str, str]) -> None:
+    def _save_users(self, users: dict[str, dict]) -> None:
         try:
             os.makedirs(self.data_dir, exist_ok=True)
             with open(self._users_file, "w", encoding="utf-8") as f:
@@ -126,45 +135,79 @@ class Settings:
             pass
 
     @staticmethod
-    def _parse_users_env(raw: str) -> dict[str, str]:
-        users: dict[str, str] = {}
+    def _parse_users_env(raw: str) -> dict[str, dict]:
+        users: dict[str, dict] = {}
         for pair in raw.split(","):
             pair = pair.strip()
             if ":" in pair:
-                u, h = pair.split(":", 1)
-                users[u.strip()] = h.strip()
+                parts = pair.split(":")
+                u = parts[0].strip()
+                h = parts[1].strip()
+                role = parts[2].strip() if len(parts) > 2 else "user"
+                users[u] = {"hash": h, "role": role}
         return users
 
     # ---------- 用户管理 API ----------
     @property
-    def users(self) -> dict[str, str]:
+    def users(self) -> dict[str, dict]:
+        """返回 {username: {"hash": ..., "role": ...}} 的副本。"""
         with self._lock:
-            return dict(self._users)
+            return {k: dict(v) for k, v in self._users.items()}
 
     @property
     def auth_secret(self) -> str:
         return self._secret
 
-    def add_user(self, username: str, password: str) -> None:
+    def user_hash(self, username: str) -> str | None:
+        """取指定用户的密码 hash。"""
+        with self._lock:
+            entry = self._users.get(username)
+            return entry["hash"] if entry else None
+
+    def user_role(self, username: str) -> str | None:
+        """取指定用户的角色。"""
+        with self._lock:
+            entry = self._users.get(username)
+            return entry["role"] if entry else None
+
+    def admin_users(self) -> list[dict]:
+        """返回所有管理员账号（含 hash），供上报同步给 web-admin。"""
+        with self._lock:
+            return [{"username": u, "hash": d["hash"]}
+                    for u, d in self._users.items() if d["role"] == "admin"]
+
+    def add_user(self, username: str, password: str, role: str = "user") -> None:
         with self._lock:
             if username in self._users:
                 raise ValueError(f"用户已存在: {username}")
-            self._users[username] = hash_password(password)
+            self._users[username] = {"hash": hash_password(password), "role": role}
             self._save_users(self._users)
 
     def set_password(self, username: str, password: str) -> None:
         with self._lock:
             if username not in self._users:
                 raise ValueError(f"用户不存在: {username}")
-            self._users[username] = hash_password(password)
+            self._users[username]["hash"] = hash_password(password)
+            self._save_users(self._users)
+
+    def set_role(self, username: str, role: str) -> None:
+        """修改用户角色（admin / user）。"""
+        if role not in ("admin", "user"):
+            raise ValueError("角色只能是 admin 或 user")
+        with self._lock:
+            if username not in self._users:
+                raise ValueError(f"用户不存在: {username}")
+            self._users[username]["role"] = role
             self._save_users(self._users)
 
     def delete_user(self, username: str) -> None:
         with self._lock:
             if username not in self._users:
                 raise ValueError(f"用户不存在: {username}")
-            if len(self._users) <= 1:
-                raise ValueError("至少保留一个用户，禁止删除最后一个用户")
+            # 至少保留一个管理员
+            admins = [u for u, d in self._users.items() if d["role"] == "admin" and u != username]
+            if not admins:
+                raise ValueError("至少保留一个管理员，禁止删除最后一个管理员")
             del self._users[username]
             self._save_users(self._users)
 
