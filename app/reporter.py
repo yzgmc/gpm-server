@@ -91,3 +91,10 @@ def stop_reporter() -> None:
     if _reporter is not None:
         _reporter.stop()
         _reporter = None
+
+
+def restart_reporter() -> None:
+    """根据当前 settings 重启上报线程。配置变更后调用以热生效。"""
+    global _reporter
+    stop_reporter()
+    start_reporter()

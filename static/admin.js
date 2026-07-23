@@ -19,7 +19,39 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).style.display = '';
     if (btn.dataset.tab === 'users') loadUsers();
+    if (btn.dataset.tab === 'config') loadConfig();
   });
+});
+
+// ---------- 配置 ----------
+async function loadConfig() {
+  try {
+    const res = await api('/api/v1/config');
+    if (!res) return;
+    const d = await res.json();
+    document.getElementById('cfgAdminUrl').value = d.admin_url || '';
+    document.getElementById('cfgPublicBaseUrl').value = d.public_base_url || '';
+    document.getElementById('cfgServerName').value = d.server_name || '';
+    document.getElementById('cfgInterval').value = d.reporter_interval || 10;
+  } catch (e) { console.error(e); }
+}
+document.getElementById('saveConfigBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('saveConfigBtn');
+  const msg = document.getElementById('configMsg');
+  btn.disabled = true; btn.textContent = '保存中...'; msg.className = 'form-msg'; msg.textContent = '';
+  const body = {
+    admin_url: document.getElementById('cfgAdminUrl').value.trim(),
+    public_base_url: document.getElementById('cfgPublicBaseUrl').value.trim(),
+    server_name: document.getElementById('cfgServerName').value.trim(),
+    reporter_interval: parseFloat(document.getElementById('cfgInterval').value) || 10,
+  };
+  try {
+    const res = await api('/api/v1/config', { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (res.ok) { msg.className = 'form-msg ok'; msg.textContent = '已保存并热生效'; loadStatus(); }
+    else { msg.className = 'form-msg err'; msg.textContent = data.error || '保存失败'; }
+  } catch (err) { msg.className = 'form-msg err'; msg.textContent = '网络错误：' + err; }
+  btn.disabled = false; btn.textContent = '保存配置';
 });
 
 function fmtBytes(n) {

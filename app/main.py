@@ -14,7 +14,7 @@ from gpm_common import API_VERSION, AuthError, GamePushError
 
 from app.config import settings
 from app.reporter import start_reporter, stop_reporter
-from app.routes import auth, games, mods, modpacks, status, sync
+from app.routes import auth, config, games, mods, modpacks, status, sync
 from app.server_info import server_info
 
 
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(auth.router)
+    app.include_router(config.router)
     app.include_router(games.router)
     app.include_router(status.router)
     app.include_router(sync.router)

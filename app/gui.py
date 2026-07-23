@@ -476,6 +476,30 @@ class ServerWindow(QMainWindow):
         self.user_list = QListWidget()
         user_layout.addWidget(self.user_list)
         self.tabs.addTab(user_tab, "用户管理")
+
+        # 配置
+        cfg_tab = QWidget(); cfg_layout = QVBoxLayout(cfg_tab)
+        cfg_form = QFormLayout()
+        self.cfg_admin_url = QLineEdit(); self.cfg_admin_url.setPlaceholderText("http://192.168.1.100:8080，留空则不上报")
+        self.cfg_public_url = QLineEdit(); self.cfg_public_url.setPlaceholderText("http://你的IP:8000")
+        self.cfg_server_name = QLineEdit()
+        self.cfg_interval = QLineEdit(); self.cfg_interval.setPlaceholderText("秒")
+        cfg_form.addRow("后台地址 (admin_url):", self.cfg_admin_url)
+        cfg_form.addRow("对外地址 (public_base_url):", self.cfg_public_url)
+        cfg_form.addRow("服务名称 (server_name):", self.cfg_server_name)
+        cfg_form.addRow("上报间隔(秒):", self.cfg_interval)
+        cfg_layout.addLayout(cfg_form)
+        cfg_btns = QHBoxLayout()
+        self.cfg_load_btn = QPushButton("加载"); self.cfg_load_btn.clicked.connect(self._load_config)
+        self.cfg_save_btn = QPushButton("保存并热生效"); self.cfg_save_btn.clicked.connect(self._save_config)
+        cfg_btns.addWidget(self.cfg_load_btn); cfg_btns.addWidget(self.cfg_save_btn)
+        cfg_btns.addStretch()
+        cfg_layout.addLayout(cfg_btns)
+        hint = QLabel("修改后台地址后立即重启上报线程热生效，无需重启服务。配置持久化到 data/server.json。")
+        hint.setStyleSheet("color: #94a3b8; font-size: 12px;"); hint.setWordWrap(True)
+        cfg_layout.addWidget(hint)
+        cfg_layout.addStretch()
+        self.tabs.addTab(cfg_tab, "配置")
         root.addWidget(self.tabs)
 
         self.setStatusBar(QStatusBar())
@@ -842,6 +866,50 @@ class ServerWindow(QMainWindow):
             if ok:
                 self.statusBar().showMessage("用户已删除", 3000)
                 self._load_users()
+            else:
+                QMessageBox.warning(self, "失败", str(r))
+
+        w.done.connect(_cb)
+        self._workers.append(w)
+        w.start()
+
+    # --- 配置 ---
+    def _load_config(self) -> None:
+        w = ApiWorker("GET", "/api/v1/config")
+        w.done.connect(self._on_config)
+        self._workers.append(w)
+        w.start()
+
+    def _on_config(self, ok: bool, result: Any) -> None:
+        if not ok or not isinstance(result, dict):
+            QMessageBox.warning(self, "失败", "加载配置失败: " + str(result))
+            return
+        self.cfg_admin_url.setText(result.get("admin_url", ""))
+        self.cfg_public_url.setText(result.get("public_base_url", ""))
+        self.cfg_server_name.setText(result.get("server_name", ""))
+        self.cfg_interval.setText(str(result.get("reporter_interval", 10)))
+
+    def _save_config(self) -> None:
+        token = self._require_token()
+        if not token:
+            return
+        try:
+            interval = float(self.cfg_interval.text().strip() or "10")
+        except ValueError:
+            interval = 10.0
+        body = json.dumps({
+            "admin_url": self.cfg_admin_url.text().strip(),
+            "public_base_url": self.cfg_public_url.text().strip(),
+            "server_name": self.cfg_server_name.text().strip(),
+            "reporter_interval": interval,
+        }).encode()
+        w = ApiWorker("PUT", "/api/v1/config", token=token, data=body,
+                      headers={"Content-Type": "application/json"})
+
+        def _cb(ok: bool, r: Any) -> None:
+            if ok:
+                self.statusBar().showMessage("配置已保存并热生效", 3000)
+                self._refresh_status()
             else:
                 QMessageBox.warning(self, "失败", str(r))
 
