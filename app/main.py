@@ -6,7 +6,9 @@ from __future__ import annotations
 import gpm_common  # noqa: F401
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from gpm_common import API_VERSION, AuthError, GamePushError
 
@@ -14,6 +16,9 @@ from app.config import settings
 from app.reporter import start_reporter, stop_reporter
 from app.routes import auth, games, mods, modpacks, status, sync
 from app.server_info import server_info
+
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 def create_app() -> FastAPI:
@@ -56,6 +61,9 @@ def create_app() -> FastAPI:
     app.include_router(modpacks.router)
     app.include_router(mods.router)
 
+    # 静态资源 + 管理 UI 页面
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
     @app.on_event("startup")
     def _start_reporter():
         # Push 模型：启动后台线程，定期向 web-admin 上报心跳
@@ -67,11 +75,25 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     def root():
+        # 根路径跳转到管理 UI；客户端仍可通过 /api/v1/* 与 /docs 访问 API
+        return FileResponse(str(STATIC_DIR / "admin.html"))
+
+    @app.get("/login")
+    def login_page():
+        return FileResponse(str(STATIC_DIR / "login.html"))
+
+    @app.get("/admin")
+    def admin_page():
+        return FileResponse(str(STATIC_DIR / "admin.html"))
+
+    @app.get("/api/info")
+    def api_info():
         return {
             "service": "gpm-server",
             "kind": settings.server_kind,
             "protocol_version": API_VERSION,
             "docs": "/docs",
+            "admin_ui": "/admin",
             "reporting_to": settings.admin_url or None,
         }
 

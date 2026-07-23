@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 · GPM 服务端管理</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <span class="logo">GPM</span>
+    <h1>服务端管理登录</h1>
+    <div class="subtitle">Game Push Manager · 管理员登录</div>
+    <form id="loginForm" autocomplete="off">
+      <label for="username">用户名</label>
+      <input id="username" name="username" type="text" required autofocus />
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" required />
+      <button class="btn" id="submitBtn" type="submit">登录</button>
+      <div class="err" id="errMsg"></div>
+    </form>
+    <div class="hint">默认账号 admin / admin123（请尽快修改）</div>
+  </div>
+  <script>
+    if (localStorage.getItem('gpm_token')) location.href = '/admin';
+    const form = document.getElementById('loginForm');
+    const btn = document.getElementById('submitBtn');
+    const errMsg = document.getElementById('errMsg');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errMsg.textContent = '';
+      btn.disabled = true; btn.textContent = '登录中...';
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) { errMsg.textContent = data.error || '登录失败'; btn.disabled = false; btn.textContent = '登录'; return; }
+        localStorage.setItem('gpm_token', data.token);
+        localStorage.setItem('gpm_user', data.username);
+        location.href = '/admin';
+      } catch (err) {
+        errMsg.textContent = '网络错误：' + err;
+        btn.disabled = false; btn.textContent = '登录';
+      }
+    });
+  </script>
+</body>
+</html>
