@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Checkout gpm-server
         uses: actions/checkout@v4
@@ -26,16 +26,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install git+https://github.com/yzgmc/gpm-common.git
-          pip install "fastapi>=0.110.0" "uvicorn[standard]>=0.27.0" "python-multipart>=0.0.9"
+          pip install "fastapi>=0.110.0" "uvicorn[standard]>=0.27.0" "python-multipart>=0.0.9" "PySide6>=6.6.0"
           pip install nuitka
 
-      - name: Build with Nuitka
+      - name: Build GUI EXE with Nuitka
         shell: pwsh
         run: |
           python -m nuitka --onefile --standalone `
             --windows-console-mode=force `
             --output-filename=gpm-server.exe `
             --output-dir=build `
+            --enable-plugin=pyside6 `
             --enable-plugin=anti-bloat `
             --include-package=gpm_common `
             --include-package=app `
@@ -45,9 +46,10 @@ jobs:
             --include-package=anyio `
             --include-package=multipart `
             --include-package=h11 `
+            --include-data-dir=static=static `
             --assume-yes-for-downloads `
             --remove-output `
-            run.py
+            run_gui.py
 
       - name: Show build output
         shell: pwsh
@@ -61,7 +63,8 @@ jobs:
           $tag = "latest"
           gh release create $tag build/gpm-server.exe --target main `
             --title "GPM 服务端 (最新构建)" `
-            --notes "Nuitka 打包的 Windows 单文件 exe（FastAPI 服务端，保留控制台窗口）。
+            --notes "Nuitka 打包的 Windows GUI exe（PySide6 管理窗口 + 后台 FastAPI 服务）。
+          启动后弹出管理窗口：状态卡片、整合包/模组上传/删除、一键打开网页管理。
           默认账号 admin / admin123，可用 GPM_AUTH_SECRET 与 GPM_USERS 环境变量覆盖。
           数据目录默认在 exe 同级 data/，可用 GPM_DATA_DIR 覆盖。
           首次运行稍慢（自解压临时文件）。" 2>$null
