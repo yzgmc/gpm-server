@@ -191,7 +191,7 @@ class ModpackMetaDialog(QDialog):
         self.version = QLineEdit(); self.version.setPlaceholderText("1.0")
         self.game = QLineEdit("minecraft")
         self.game_version = QLineEdit(); self.game_version.setPlaceholderText("1.20")
-        self.loader = QComboBox(); self.loader.addItems(["vanilla", "forge", "fabric", "quilt"])
+        self.loader = QComboBox(); self.loader.addItems(["vanilla", "forge", "neoforge", "fabric", "quilt"])
         self.loader_ver = QLineEdit(); self.loader_ver.setPlaceholderText("可选")
         self.desc = QLineEdit(); self.desc.setPlaceholderText("可选")
         self.enabled = QCheckBox("上架（取消勾选则下架，客户端同步不到）")
